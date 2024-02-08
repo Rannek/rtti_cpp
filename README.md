@@ -27,3 +27,5 @@ Usage: `./thumbnail_extractor img.bin`
 **Note:** Currently only working with `Image8` headers
 
 *Any contributions are welcome*
+
+![Program In Use](https://raw.githubusercontent.com/Rannek/rtti_cpp/main/Screenshot_20240208_155019.png)
