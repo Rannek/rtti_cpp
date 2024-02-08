@@ -20,4 +20,8 @@ Raw Therapee Thumbnail Extractor in C++ supporting binary files
 2. **Testing:**  
 You can test the utility using the provided "TEST" folder.
 
+Usage: `./thumbnail_extractor img.bin`
 
+**Note:** Currently only working with `Image8` headers
+
+*Any contributions are welcome*
