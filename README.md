@@ -5,7 +5,7 @@ Raw Therapee automatically generates thumbnails for all the images in the folder
 
 ## Dependencies
 
-- C++ standard libraries: `<cstdint>`, `<filesystem>`, `<fstream>`, `<iostream>`, `<vector>`, `<stdexcept>`
+- C++ standard libraries: `<cstdint>`, `<filesystem>`, `<fstream>`, `<iostream>`, `<vector>`, `<stdexcept>`, `<array>`, `<string_view>`
 
 ## Functionality
 
