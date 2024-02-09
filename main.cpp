@@ -24,18 +24,35 @@
 namespace fs = std::filesystem;
 
 struct ImageConfig {
-    static constexpr std::array<std::string_view, 1> Headers = {"Image8"};
+
+	static constexpr std::array<std::string_view, 1> Headers = {"Image8"};
+	
     static constexpr int MaxWidth = 2000;
     static constexpr int MaxHeight = 2000;
+
 };
 
 class ImageFile {
 
 public:
-    static bool FindHeader(std::ifstream& file);
-    static std::pair<int, int> ReadDimensions(std::ifstream& file);
-    static void SaveAsBMP(const fs::path& output_path, const std::vector<unsigned char>& img_data, int width, int height);
-    static void Process(const fs::path& file_path);
+    static bool FindHeader(
+        std::ifstream& file
+    );
+
+    static std::pair<int, int> ReadDimensions(
+        std::ifstream& file
+    );
+
+    static void SaveAsBMP(
+        const fs::path& output_path,
+        const std::vector<unsigned char>& img_data,
+        int width,
+        int height
+    );
+
+    static void Process(
+        const fs::path& file_path
+    );
 };
 
 int main(int argc, char** argv) {
@@ -45,6 +62,7 @@ int main(int argc, char** argv) {
     }
 
     ImageFile::Process(argv[1]);
+
     return 0;
 }
 
@@ -78,12 +96,23 @@ std::pair<int, int> ImageFile::ReadDimensions(std::ifstream& file) {
     return {width, height};
 }
 
-void ImageFile::SaveAsBMP(const fs::path& output_path, const std::vector<unsigned char>& img_data, int width, int height) {
+void ImageFile::SaveAsBMP(
+    const fs::path& output_path,
+    const std::vector<unsigned char>& img_data,
+    int width,
+    int height
+) 
+
+{
     std::ofstream file(output_path, std::ios::binary);
     if (!file) {
         std::cerr << "Failed to open output file.\n";
         return;
-    }
+}
+
+// Set up BMP file header and info header with appropriate values for a BMP image.
+// Adjust padding for each row based on width to ensure proper alignment.
+// Write the headers to the file stream.
 
     unsigned char bmpFileHeader[14] = {'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0};
     unsigned char bmpInfoHeader[40] = {40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0};
@@ -107,15 +136,25 @@ void ImageFile::SaveAsBMP(const fs::path& output_path, const std::vector<unsigne
     file.write(reinterpret_cast<char*>(bmpFileHeader), sizeof(bmpFileHeader));
     file.write(reinterpret_cast<char*>(bmpInfoHeader), sizeof(bmpInfoHeader));
 
+// Create padding array to ensure proper alignment of pixel data.
+// Iterate over each row of the image data, swapping red and blue channels for each pixel.
+// Write the modified image row to the file stream, followed by padding to align to 4-byte boundaries.
+
     unsigned char padding[3] = {0, 0, 0};
     for (int i = height - 1; i >= 0; --i) {
         for (int j = 0; j < width; ++j) {
-            std::swap(const_cast<unsigned char&>(img_data[(i * width * 3) + (j * 3)]), const_cast<unsigned char&>(img_data[(i * width * 3) + (j * 3) + 2]));
+			unsigned char& pixel_red = const_cast<unsigned char&>(img_data[(i * width * 3) + (j * 3)]);
+			unsigned char& pixel_blue = const_cast<unsigned char&>(img_data[(i * width * 3) + (j * 3) + 2]);
+			std::swap(pixel_red, pixel_blue);
         }
         file.write(reinterpret_cast<const char*>(img_data.data() + (i * width * 3)), width * 3);
         file.write(reinterpret_cast<const char*>(padding), paddingAmount);
     }
 }
+
+// Try to read dimensions of the image; if unsuccessful, continue to the next header.
+// Check if image dimensions exceed maximum allowed values; if so, skip processing.
+// Allocate memory for image data and read the pixel data from the file.
 
 void ImageFile::Process(const fs::path& file_path) {
     std::ifstream file(file_path, std::ios::binary);
