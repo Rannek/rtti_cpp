@@ -18,14 +18,18 @@
 #include <iostream>
 #include <vector>
 #include <stdexcept>
-#include <opencv2/opencv.hpp>
 
 namespace fs = std::filesystem;
 
+// Configurable parameters
+const std::vector<std::string> Headers = {"Image8"};
+const int Max_Image_Width = 2000;
+const int Max_Image_Height = 2000;
+
 // Function declarations
 bool FindImageHeader(std::ifstream& file);
-int ReadDimension(std::ifstream& file);
-cv::Mat ExtractImage(std::ifstream& file, int width, int height);
+std::pair<int, int> ReadDimensions(std::ifstream& file);
+void SaveAsBMP(const std::string& output_path, std::vector<unsigned char>& img_data, int width, int height);
 void ProcessFile(const std::string& file_path);
 
 int main(int argc, char** argv) {
@@ -38,59 +42,102 @@ int main(int argc, char** argv) {
     return 0;
 }
 
-// Function definitions
-
 bool FindImageHeader(std::ifstream& file) {
-    const std::vector<unsigned char> kTargetHeader = {0x49, 0x6D, 0x61, 0x67, 0x65, 0x38}; // "Image8"
-    std::vector<unsigned char> buffer;
+    std::string buffer;
     char ch;
 
     while (file.get(ch)) {
-        buffer.push_back(static_cast<unsigned char>(ch));
+        buffer.push_back(ch);
 
-        if (buffer.size() > kTargetHeader.size()) {
-            buffer.erase(buffer.begin());
+        // Check each header in Headers
+        for (const auto& header : Headers) {
+            if (buffer.size() > header.size()) {
+                buffer.erase(buffer.begin());
+            }
+
+            if (buffer == header) {
+                return true;
+            }
         }
 
-        if (buffer == kTargetHeader) {
-            std::cout << "Found 'Image8' header.\n";
-            return true;
+        // Reset buffer if it's longer than the longest header
+        if (buffer.size() > Headers[0].length()) {
+            buffer.erase(buffer.begin());
         }
     }
     return false;
 }
 
-int ReadDimension(std::ifstream& file) {
+std::pair<int, int> ReadDimensions(std::ifstream& file) {
     unsigned char bytes[4];
-    if (!file.read(reinterpret_cast<char*>(bytes), sizeof(bytes))) {
-        throw std::runtime_error("Failed to read dimension from file.");
-    }
+    int width, height;
 
-    return bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+    // Reading width
+    if (!file.read(reinterpret_cast<char*>(bytes), sizeof(bytes))) {
+        throw std::runtime_error("Failed to read width from file.");
+    }
+    width = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+
+    // Reading height
+    if (!file.read(reinterpret_cast<char*>(bytes), sizeof(bytes))) {
+        throw std::runtime_error("Failed to read height from file.");
+    }
+    height = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+
+    return {width, height};
 }
 
-cv::Mat ExtractImage(std::ifstream& file, int width, int height) {
-    if (width > 2000 || height > 2000) {
-        std::cerr << "Image dimensions exceed the maximum allowed size of 2000x2000.\n";
-        return cv::Mat(); // Return an empty matrix to indicate failure.
+void SaveAsBMP(const std::string& output_path, std::vector<unsigned char>& img_data, int width, int height) {
+    std::ofstream file(output_path, std::ios::binary);
+    if (!file) {
+        std::cerr << "Failed to open output file.\n";
+        return;
     }
 
-    std::vector<unsigned char> img_data(width * height * 3);
-    if (!file.read(reinterpret_cast<char*>(img_data.data()), img_data.size())) {
-        std::cerr << "Failed to read image data.\n";
-        return cv::Mat();
-    }
+    // BMP File Header
+    unsigned char bmpFileHeader[14] = {'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0};
+    // BMP Info Header
+    unsigned char bmpInfoHeader[40] = {40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0};
 
-    cv::Mat image(height, width, CV_8UC3, img_data.data());
-    cv::Mat image_rgb;
-    cv::cvtColor(image, image_rgb, cv::COLOR_BGR2RGB);
-    return image_rgb.clone();
+    // Calculate padding for alignment to 4 bytes
+    int paddingAmount = (4 - (width * 3) % 4) % 4;
+    int fileSize = 54 + (width * 3 + paddingAmount) * height;
+
+    // Update file size in header
+    bmpFileHeader[2] = fileSize;
+    bmpFileHeader[3] = fileSize >> 8;
+    bmpFileHeader[4] = fileSize >> 16;
+    bmpFileHeader[5] = fileSize >> 24;
+
+    // Width and height in info header
+    bmpInfoHeader[4] = width;
+    bmpInfoHeader[5] = width >> 8;
+    bmpInfoHeader[6] = width >> 16;
+    bmpInfoHeader[7] = width >> 24;
+    bmpInfoHeader[8] = height;
+    bmpInfoHeader[9] = height >> 8;
+    bmpInfoHeader[10] = height >> 16;
+    bmpInfoHeader[11] = height >> 24;
+
+    // Write the headers
+    file.write(reinterpret_cast<char*>(bmpFileHeader), sizeof(bmpFileHeader));
+    file.write(reinterpret_cast<char*>(bmpInfoHeader), sizeof(bmpInfoHeader));
+
+    // Write image data with padding and channel swapping
+    unsigned char padding[3] = {0, 0, 0};
+    for (int i = height - 1; i >= 0; i--) {
+        for (int j = 0; j < width; j++) {
+            // Swap the red and blue components for each pixel
+            std::swap(img_data[(i * width * 3) + (j * 3)], img_data[(i * width * 3) + (j * 3) + 2]);
+        }
+        file.write(reinterpret_cast<char*>(img_data.data() + (i * width * 3)), width * 3);
+        file.write(reinterpret_cast<char*>(padding), paddingAmount);
+    }
 }
 
 void ProcessFile(const std::string& file_path) {
     std::ifstream file(file_path, std::ios::binary);
     if (!file) {
-        std::cerr << "Failed to open file: " << file_path << "\n";
         return;
     }
 
@@ -98,30 +145,25 @@ void ProcessFile(const std::string& file_path) {
         file.ignore(1); // Skip newline character
 
         try {
-            int width = ReadDimension(file);
-            int height = ReadDimension(file);
-            std::cout << "Dimension read: width=" << width << ", height=" << height << "\n";
+            auto [width, height] = ReadDimensions(file);
 
-            if (width <= 0 || height <= 0) {
-                std::cerr << "Invalid image dimensions read, skipping image extraction.\n";
-                continue; // Skip to the next image header if dimensions are invalid
-            }
-
-            auto image = ExtractImage(file, width, height);
-            if (!image.empty()) {
-                static int image_counter = 0;
-                std::string output_path = fs::path(file_path).stem().string() + "_extracted_" + std::to_string(++image_counter) + ".png";
-                if (cv::imwrite(output_path, image)) {
-                    std::cout << "Extracted and saved image: " << output_path << "\n";
-                } else {
-                    std::cerr << "Failed to save the extracted image. Possible write permission issue or disk space limitation.\n";
+            // Only process if dimensions are within limits
+            if (width <= Max_Image_Width && height <= Max_Image_Height) {
+                std::vector<unsigned char> img_data(width * height * 3);
+                if (!file.read(reinterpret_cast<char*>(img_data.data()), img_data.size())) {
+                    continue;
                 }
+
+                static int image_counter = 0;
+                std::string output_path = fs::path(file_path).stem().string() + "_extracted_" + std::to_string(++image_counter) + ".bmp";
+                SaveAsBMP(output_path, img_data, width, height);
             } else {
-                std::cerr << "Extracted image is empty, possible corruption or unsupported format. Skipping.\n";
+                // Skip this image due to size constraints
+                continue;
             }
+
         } catch (const std::runtime_error& e) {
-            std::cerr << "Error processing file: " << e.what() << "."
-                      << " Attempting to continue with next image...\n";
+            continue;
         }
     }
 }
