@@ -5,14 +5,13 @@ Raw Therapee automatically generates thumbnails for all the images in the folder
 
 ## Dependencies
 
-- OpenCV (opencv2/opencv.hpp)
 - C++ standard libraries: `<cstdint>`, `<filesystem>`, `<fstream>`, `<iostream>`, `<vector>`, `<stdexcept>`
 
 ## Functionality
 
 - **FindImageHeader**: Searches for the "Image8" header within the binary file.
 - **ReadDimension**: Reads the width and height dimensions of the image.
-- **ExtractImage**: Extracts the image data and converts it to RGB format.
+- **ExtractImage**: Extracts the image data and converts it to RGB format in BMP.
 - **ProcessFile**: Main function to process the provided file path, extract images, and save them.
 
 
